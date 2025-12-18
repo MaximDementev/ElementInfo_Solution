@@ -38,6 +38,7 @@
       <Private>False</Private>
     </Reference>
     <Reference Include="PresentationCore" />
+    <Reference Include="PresentationFramework" />
     <Reference Include="RevitAPI">
       <HintPath>..\..\..\..\..\..\..\..\Program Files\Autodesk\Revit 2022\RevitAPI.dll</HintPath>
       <Private>False</Private>
@@ -50,29 +51,44 @@
     <Reference Include="System.Core" />
     <Reference Include="System.Drawing" />
     <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Xaml" />
     <Reference Include="System.Xml.Linq" />
     <Reference Include="System.Data.DataSetExtensions" />
     <Reference Include="Microsoft.CSharp" />
     <Reference Include="System.Data" />
     <Reference Include="System.Net.Http" />
     <Reference Include="System.Xml" />
+    <Reference Include="WindowsBase" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Commands\GetDocumentInfoCommand.cs" />
     <Compile Include="Commands\GetElementsIdCommand.cs" />
     <Compile Include="Commands\GetMultipleElementsInfoCommand.cs" />
     <Compile Include="Commands\OpenViewByNameCommand.cs" />
     <Compile Include="Commands\SelectElementsByIdCommand.cs" />
     <Compile Include="Constants\Messages.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Services\ElementInfoService.cs" />
+    <Compile Include="Services\IElementInfoService.cs" />
+    <Compile Include="UI\InfoDisplayWindow.xaml.cs">
+      <DependentUpon>InfoDisplayWindow.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="UI\TextInputDialog.xaml.cs">
+      <DependentUpon>TextInputDialog.xaml</DependentUpon>
+    </Compile>
     <Compile Include="Utils\DialogHelper.cs" />
     <Compile Include="Utils\DocumentInfoFormatter.cs" />
-    <Compile Include="Utils\ElementsIdDialog.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="Utils\TextInputForm.cs">
-      <SubType>Form</SubType>
-    </Compile>
     <Compile Include="Utils\TextParser.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <Page Include="UI\InfoDisplayWindow.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="UI\TextInputDialog.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

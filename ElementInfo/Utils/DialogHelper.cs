@@ -1,16 +1,13 @@
 ﻿using Autodesk.Revit.UI;
 using MagicEntry.Plugins.ElementInfo.Constants;
+using MagicEntry.Plugins.ElementInfo.UI;
 using System.Windows;
-using System.Windows.Forms;
 
 namespace MagicEntry.Plugins.ElementInfo.Utils
 {
-    // Утилитарный класс для работы с диалогами
     public static class DialogHelper
     {
-        #region Public Methods
-
-        // Показывает диалог с информацией и возможностью копирования в буфер
+        // Показывает диалог с информацией и возможностью копирования в буфер (устаревший метод для обратной совместимости)
         public static bool ShowInfoDialogWithCopy(string info)
         {
             var dialog = new TaskDialog(Messages.INFORMATION_TITLE)
@@ -26,7 +23,7 @@ namespace MagicEntry.Plugins.ElementInfo.Utils
 
             if (result == TaskDialogResult.Yes)
             {
-                System.Windows.Clipboard.SetText(info);
+                Clipboard.SetText(info);
                 return true;
             }
 
@@ -45,18 +42,16 @@ namespace MagicEntry.Plugins.ElementInfo.Utils
             TaskDialog.Show(Messages.SUCCESS_TITLE, message);
         }
 
-        // Показывает WinForms диалог для ввода текста с возможностью показа невалидного текста
         public static string ShowTextInputDialog(string title = null, string message = null, string invalidText = "")
         {
             title = title ?? Messages.ENTER_TEXT_TITLE;
             message = message ?? Messages.ENTER_TEXT_INSTRUCTION;
 
-            using (var form = new TextInputForm(title, message, invalidText))
+            var dialog = new TextInputDialog(title, message, invalidText);
+
+            if (dialog.ShowDialog() == true)
             {
-                if (form.ShowDialog() == DialogResult.OK)
-                {
-                    return form.InputText;
-                }
+                return dialog.InputText;
             }
 
             return null;
@@ -68,7 +63,5 @@ namespace MagicEntry.Plugins.ElementInfo.Utils
             string message = $"{errorMessage}\n\nВведите корректный текст:";
             return ShowTextInputDialog(Messages.INVALID_TEXT_TITLE, message, invalidText);
         }
-
-        #endregion
     }
 }

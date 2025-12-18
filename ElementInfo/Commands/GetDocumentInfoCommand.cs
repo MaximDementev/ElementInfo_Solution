@@ -1,25 +1,22 @@
 ﻿using Autodesk.Revit.Attributes;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
-using Autodesk.Revit.UI.Selection;
 using MagicEntry.Core.Interfaces;
 using MagicEntry.Core.Models;
-using MagicEntry.Plugins.ElementInfo.Constants;
 using MagicEntry.Plugins.ElementInfo.Services;
 using MagicEntry.Plugins.ElementInfo.UI;
 using System;
-using System.Collections.Generic;
-using System.Linq;
 
 namespace MagicEntry.Plugins.ElementInfo.Commands
 {
+    // Команда для отображения информации о текущем документе
     [Transaction(TransactionMode.Manual)]
     [Regeneration(RegenerationOption.Manual)]
-    public class GetMultipleElementsInfoCommand : IExternalCommand, IPlugin
+    public class GetDocumentInfoCommand : IExternalCommand, IPlugin
     {
         private readonly IElementInfoService _elementInfoService;
 
-        public GetMultipleElementsInfoCommand()
+        public GetDocumentInfoCommand()
         {
             _elementInfoService = new ElementInfoService();
         }
@@ -66,34 +63,12 @@ namespace MagicEntry.Plugins.ElementInfo.Commands
                 }
 
                 // Получаем общую информацию о документе
-                string generalInfo = _elementInfoService.GetGeneralDocumentInfo(doc, currentView, commandData.Application.Application.Username);
-
-                // Получаем предварительно выбранные элементы
-                var selectedElements = _elementInfoService.GetPreSelectedElements(uidoc);
-
-                // Если элементы не выбраны, запускаем режим выбора
-                if (!selectedElements.Any())
-                {
-                    selectedElements = SelectMultipleElements(uidoc.Selection, doc);
-                }
-
-                string fullInfo;
-
-                if (selectedElements == null || !selectedElements.Any())
-                {
-                    // Если элементы не выбраны, показываем только общую информацию
-                    fullInfo = generalInfo + "\nЭлементы не выбраны";
-                }
-                else
-                {
-                    // Форматируем полную информацию
-                    string elementsInfo = _elementInfoService.GetElementsFullInfo(selectedElements, doc);
-                    fullInfo = generalInfo + elementsInfo;
-                }
+                string documenExtratInfo = _elementInfoService.GetGeneralDocumentInfo(doc, currentView, commandData.Application.Application.Username);
+                documenExtratInfo += _elementInfoService.GetExtraDocumentInfo(doc, currentView, commandData.Application.Application.Username);
 
                 // Показываем WPF окно с информацией
-                var window = new InfoDisplayWindow("Информация об элементах");
-                window.SetText(fullInfo);
+                var window = new InfoDisplayWindow("Информация о документе");
+                window.SetText(documenExtratInfo);
                 window.ShowDialog();
 
                 return Result.Succeeded;
@@ -103,23 +78,6 @@ namespace MagicEntry.Plugins.ElementInfo.Commands
                 message = ex.Message;
                 TaskDialog.Show("Ошибка", $"Ошибка при выполнении команды: {ex.Message}");
                 return Result.Failed;
-            }
-        }
-
-        #endregion
-
-        #region Private Methods
-
-        private List<Element> SelectMultipleElements(Selection selection, Document doc)
-        {
-            try
-            {
-                var elementRefs = selection.PickObjects(ObjectType.Element, Messages.SELECT_ELEMENTS_INSTRUCTION);
-                return elementRefs.Select(elementRef => doc.GetElement(elementRef)).ToList();
-            }
-            catch
-            {
-                return null;
             }
         }
 

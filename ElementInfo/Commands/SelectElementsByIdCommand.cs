@@ -8,13 +8,10 @@ using MagicEntry.Plugins.ElementInfo.Utils;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Runtime.Remoting.Messaging;
 using System.Windows;
-using System.Xml.Linq;
 
 namespace MagicEntry.Plugins.ElementInfo.Commands
 {
-    // Команда для поиска и выделения элементов по ID из текста
     [Transaction(TransactionMode.Manual)]
     [Regeneration(RegenerationOption.Manual)]
     public class SelectElementsByIdCommand : IExternalCommand, IPlugin
@@ -55,6 +52,13 @@ namespace MagicEntry.Plugins.ElementInfo.Commands
             {
                 var doc = commandData.Application.ActiveUIDocument.Document;
                 var uiDoc = commandData.Application.ActiveUIDocument;
+
+                // Проверка: проект, не семейство, не шаблон
+                if (doc.IsFamilyDocument)
+                {
+                    TaskDialog.Show("Ошибка", "Это семейство. Информацию можно получить только из файла проекта");
+                    return Result.Failed;
+                }
 
                 // Получаем текст для анализа с валидацией
                 string textToAnalyze = GetValidatedTextForAnalysis();
@@ -122,43 +126,23 @@ namespace MagicEntry.Plugins.ElementInfo.Commands
                     }
                     else
                     {
-                        // Текст из буфера невалидный, показываем диалог с ошибкой
+                        // Текст из буфера невалидный, показываем WPF диалог с ошибкой
                         textToAnalyze = DialogHelper.ShowInvalidTextDialog(clipboardText, Messages.INVALID_ID_FORMAT);
                     }
                 }
                 else
                 {
-                    // В буфере нет текста, показываем обычный диалог ввода
+                    // В буфере нет текста, показываем обычный WPF диалог ввода
                     textToAnalyze = DialogHelper.ShowTextInputDialog();
                 }
             }
             catch
             {
-                // Ошибка при работе с буфером, показываем диалог ввода
+                // Ошибка при работе с буфером, показываем WPF диалог ввода
                 textToAnalyze = DialogHelper.ShowTextInputDialog();
             }
 
             return textToAnalyze;
-        }
-
-        // Получает текст для анализа из буфера обмена или диалога ввода
-        private string GetTextForAnalysis()
-        {
-            try
-            {
-                // Сначала пробуем получить из буфера обмена
-                string clipboardText = Clipboard.GetText();
-                if (!string.IsNullOrWhiteSpace(clipboardText))
-                {
-                    return clipboardText;
-                }
-            }
-            catch
-            {
-                // Если не удалось получить из буфера, показываем диалог ввода
-            }
-
-            return DialogHelper.ShowTextInputDialog();
         }
 
         // Находит элементы по списку ID

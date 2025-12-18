@@ -36,7 +36,7 @@ namespace MagicEntry.Plugins.ElementInfo.Utils
             for (int i = 0; i < elements.Count; i++)
             {
                 var element = elements[i];
-                sb.AppendLine(string.Format($"{ i + 1}", Messages.ELEMENT_SEPARATOR));
+                sb.AppendLine(string.Format($"{i + 1}", Messages.ELEMENT_SEPARATOR));
 
                 string worksetName = GetWorksetName(element, doc);
                 sb.AppendLine(string.Format(Messages.WORKSET_TEMPLATE, worksetName));

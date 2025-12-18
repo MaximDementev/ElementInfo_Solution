@@ -20,7 +20,8 @@
         public const string VIEW_OPENED = "Открыт вид: {0}";
         public const string INVALID_TEXT_TITLE = "Неверный формат текста";
         public const string INVALID_VIEW_FORMAT = "В тексте не найдено имя вида в формате 'Активный вид: [название]'";
-        public const string INVALID_ID_FORMAT = "В тексте не найдены ID элементов в формате 'ID: [число]'";
+        public const string INVALID_ID_FORMAT = "В тексте не найдены ID элементов в формате 'ID: [число]'\n" +
+            "Можно указать несколько ID элементов, например, 'ID111111 ID222222 ID333333'";
         public const string ELEMENTS_ID_DIALOG_TITLE = "ID выбранных элементов";
         public const string COPY_TO_CLIPBOARD_BUTTON = "Скопировать в буфер обмена";
         public const string SELECT_MORE_ELEMENTS_BUTTON = "Выбрать еще элементы";
