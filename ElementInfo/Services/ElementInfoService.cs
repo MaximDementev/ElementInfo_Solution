@@ -94,7 +94,7 @@ namespace MagicEntry.Plugins.ElementInfo.Services
             if (!grids.Any()) return null;
 
             var gridGroups = grids.GroupBy(g => worksetTable.GetWorkset(g.WorksetId)?.Name ?? "<Не задан>");
-            string result = "▶ Оси по рабочим наборам:\n";
+            string result = "\n▶ Оси по рабочим наборам:\n";
 
             foreach (var g in gridGroups)
             {
@@ -113,7 +113,7 @@ namespace MagicEntry.Plugins.ElementInfo.Services
             if (!levels.Any()) return null;
 
             var levelGroups = levels.GroupBy(l => worksetTable.GetWorkset(l.WorksetId)?.Name ?? "<Не задан>");
-            string result = "▶ Уровни по рабочим наборам:\n";
+            string result = "\n▶ Уровни по рабочим наборам:\n";
 
             foreach (var g in levelGroups)
             {
@@ -127,28 +127,74 @@ namespace MagicEntry.Plugins.ElementInfo.Services
 
         private string GetLinksInfo(Document doc)
         {
-            var links = new FilteredElementCollector(doc).OfClass(typeof(RevitLinkInstance)).Cast<RevitLinkInstance>();
-            if (!links.Any()) return null;
-
             var worksetTable = doc.GetWorksetTable();
-            string result = "▶ Связи:\n";
+            string result = "\n▶ Связи:";
 
-            foreach (var link in links)
+            var linkTypes = new FilteredElementCollector(doc)
+                .OfClass(typeof(RevitLinkType))
+                .Cast<RevitLinkType>()
+                .ToList();
+
+            foreach (var linkType in linkTypes)
             {
-                var linkType = doc.GetElement(link.GetTypeId()) as RevitLinkType;
-                Document linkDoc = link.GetLinkDocument();
-                if (linkDoc == null) continue;
+                var instances = linkType
+                    .GetDependentElements(new ElementClassFilter(typeof(RevitLinkInstance)))
+                    .Select(id => doc.GetElement(id))
+                    .Cast<RevitLinkInstance>()
+                    .ToList();
 
-                string attachment = linkType != null && linkType.AttachmentType == AttachmentType.Attachment ? "Прикрепление" : "Наложение";
-                string pinned = link.Pinned ? "Закреплен" : "Не закреплен";
-                string wsName = worksetTable.GetWorkset(link.WorksetId)?.Name ?? "<Не задан>";
-                string linkFile = link.Name ?? linkDoc.Title;
-                string linkFullPath = linkDoc.PathName ?? "<Не загружена>";
+                if (!instances.Any())
+                    continue;
 
-                result += $"  {linkFile}\n    Путь: {linkFullPath}\n    Тип: {attachment}\n    {pinned}\n    Рабочий набор: {wsName}\n";
+                // --- ДАННЫЕ ТИПА ---
+                string attachment =
+                    linkType.AttachmentType == AttachmentType.Attachment
+                        ? "Прикрепление"
+                        : "Наложение";
+
+                string linkFullPath = "<Не загружена>";
+                var extRef = linkType.GetExternalFileReference();
+
+                if (extRef != null)
+                {
+                    var modelPath = extRef.GetAbsolutePath();
+                    linkFullPath = ModelPathUtils.ConvertModelPathToUserVisiblePath(modelPath);
+                }
+                result += "\n";
+                result += $@"  {linkType.Name}
+   Путь: {linkFullPath}
+   Тип: {attachment}
+";
+
+                // --- ЭКЗЕМПЛЯРЫ ---
+                foreach (var link in instances)
+                {
+                    string instanceName = link.Name;
+
+                    string prefix = linkType.Name + " :";
+
+                    if (!string.IsNullOrEmpty(instanceName) && instanceName.StartsWith(prefix))
+                    {
+                        instanceName = instanceName.Substring(prefix.Length).Trim();
+                    }
+
+
+                    string pinned = link.Pinned ? "Закреплен" : "Не закреплен";
+                    string wsName = worksetTable.GetWorkset(link.WorksetId)?.Name ?? "<Не задан>";
+
+                    result +=
+                        $@"    • Экземпляр ''{instanceName}''
+      {pinned}
+      Рабочий набор: {wsName}";
+                }
+
+                result += "\n";
+
             }
+
             return result.TrimEnd();
         }
+
 
         private string GetImportsInfo(Document doc)
         {
