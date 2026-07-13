@@ -2,20 +2,20 @@
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
 using Autodesk.Revit.UI.Selection;
-using MagicEntry.Core.Interfaces;
-using MagicEntry.Core.Models;
-using MagicEntry.Plugins.ElementInfo.Constants;
-using MagicEntry.Plugins.ElementInfo.Services;
-using MagicEntry.Plugins.ElementInfo.UI;
+using Neuroptera.Contracts.PluginLogging;
+using Neuroptera.Plugins.ElementInfo.Constants;
+using Neuroptera.Plugins.ElementInfo.Services;
+using Neuroptera.Plugins.ElementInfo.UI;
+using Neuroptera.Revit.Contracts.PluginLogging;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace MagicEntry.Plugins.ElementInfo.Commands
+namespace Neuroptera.Plugins.ElementInfo.Commands
 {
     [Transaction(TransactionMode.Manual)]
     [Regeneration(RegenerationOption.Manual)]
-    public class GetMultipleElementsInfoCommand : IExternalCommand, IPlugin
+    public class GetMultipleElementsInfoCommand : IExternalCommand
     {
         private readonly IElementInfoService _elementInfoService;
 
@@ -24,91 +24,77 @@ namespace MagicEntry.Plugins.ElementInfo.Commands
             _elementInfoService = new ElementInfoService();
         }
 
-        #region IPlugin Implementation
-
-        public PluginInfo Info { get; set; }
-        public bool IsEnabled { get; set; }
-
-        public bool Initialize()
-        {
-            try
-            {
-                IsEnabled = true;
-                return true;
-            }
-            catch
-            {
-                return false;
-            }
-        }
-
-        public void Shutdown()
-        {
-        }
-
-        #endregion
-
-        #region IExternalCommand Implementation
-
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {
+            var doc = commandData.Application.ActiveUIDocument.Document;
+            var journal = PluginOperationJournal.Start(
+                ElementInfoOperations.PluginId,
+                ElementInfoOperations.GetMultipleElementsInfo,
+                doc.Title);
+
             try
             {
+                journal.Step("Запуск команды получения информации об элементах");
+
                 var uidoc = commandData.Application.ActiveUIDocument;
-                var doc = uidoc.Document;
                 var currentView = uidoc.ActiveView;
 
-                // Проверка: проект, не семейство, не шаблон
                 if (doc.IsFamilyDocument)
                 {
-                    TaskDialog.Show("Ошибка", "Это семейство. Информацию можно получить только из файла проекта");
+                    RevitPluginErrorHandling.ShowValidation(
+                        "Это семейство. Информацию можно получить только из файла проекта.",
+                        "Откройте файл проекта и повторите команду.",
+                        ElementInfoOperations.PluginId,
+                        ElementInfoOperations.GetMultipleElementsInfo,
+                        doc);
                     return Result.Failed;
                 }
 
-                // Получаем общую информацию о документе
-                string generalInfo = _elementInfoService.GetGeneralDocumentInfo(doc, currentView, commandData.Application.Application.Username);
+                journal.Step("Сбор общей информации о документе");
+                string generalInfo = _elementInfoService.GetGeneralDocumentInfo(
+                    doc,
+                    currentView,
+                    commandData.Application.Application.Username);
 
-                // Получаем предварительно выбранные элементы
                 var selectedElements = _elementInfoService.GetPreSelectedElements(uidoc);
-
-                // Если элементы не выбраны, запускаем режим выбора
                 if (!selectedElements.Any())
                 {
+                    journal.Step("Выбор элементов пользователем");
                     selectedElements = SelectMultipleElements(uidoc.Selection, doc);
-                }
-
-                string fullInfo;
-
-                if (selectedElements == null || !selectedElements.Any())
-                {
-                    // Если элементы не выбраны, показываем только общую информацию
-                    fullInfo = generalInfo + "\nЭлементы не выбраны";
                 }
                 else
                 {
-                    // Форматируем полную информацию
+                    journal.Step("Использованы предварительно выбранные элементы", selectedElements.Count.ToString());
+                }
+
+                string fullInfo;
+                if (selectedElements == null || !selectedElements.Any())
+                {
+                    fullInfo = generalInfo + "\nЭлементы не выбраны";
+                    journal.Step("Элементы не выбраны");
+                }
+                else
+                {
+                    journal.Step("Формирование информации об элементах", selectedElements.Count.ToString());
                     string elementsInfo = _elementInfoService.GetElementsFullInfo(selectedElements, doc);
                     fullInfo = generalInfo + elementsInfo;
                 }
 
-                // Показываем WPF окно с информацией
+                journal.Step("Отображение окна с информацией");
                 var window = new InfoDisplayWindow("Информация об элементах");
                 window.SetText(fullInfo);
                 window.ShowDialog();
 
+                journal.Complete("Информация об элементах показана");
                 return Result.Succeeded;
             }
             catch (Exception ex)
             {
                 message = ex.Message;
-                TaskDialog.Show("Ошибка", $"Ошибка при выполнении команды: {ex.Message}");
+                RevitPluginErrorHandling.Handle(ex, journal);
                 return Result.Failed;
             }
         }
-
-        #endregion
-
-        #region Private Methods
 
         private List<Element> SelectMultipleElements(Selection selection, Document doc)
         {
@@ -122,7 +108,5 @@ namespace MagicEntry.Plugins.ElementInfo.Commands
                 return null;
             }
         }
-
-        #endregion
     }
 }

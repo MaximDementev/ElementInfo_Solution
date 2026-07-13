@@ -1,8 +1,9 @@
 ﻿using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
+using Neuroptera.Plugins.ElementInfo.Models;
 using System.Collections.Generic;
 
-namespace MagicEntry.Plugins.ElementInfo.Services
+namespace Neuroptera.Plugins.ElementInfo.Services
 {
     // Интерфейс сервиса для получения информации об элементах
     public interface IElementInfoService
@@ -12,6 +13,9 @@ namespace MagicEntry.Plugins.ElementInfo.Services
         
         //Получение дополнительной информации о текущем документе
         string GetExtraDocumentInfo(Document doc, View currentView, string userName);
+
+        // Получает информацию о документе в табличном виде
+        List<DocumentInfoTable> GetDocumentInfoTables(Document doc, View currentView, string userName);
         
         // Получает путь к документу
         string GetDocumentPath(Document doc);

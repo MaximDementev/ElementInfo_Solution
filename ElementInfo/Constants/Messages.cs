@@ -1,4 +1,4 @@
-﻿namespace MagicEntry.Plugins.ElementInfo.Constants
+﻿namespace Neuroptera.Plugins.ElementInfo.Constants
 {
     // Статический класс для хранения всех сообщений и постоянных данных
     public static class Messages

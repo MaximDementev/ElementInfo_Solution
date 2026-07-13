@@ -1,150 +1,125 @@
 ﻿using Autodesk.Revit.Attributes;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
-using MagicEntry.Core.Interfaces;
-using MagicEntry.Core.Models;
-using MagicEntry.Plugins.ElementInfo.Constants;
-using MagicEntry.Plugins.ElementInfo.Utils;
+using Neuroptera.Contracts.PluginLogging;
+using Neuroptera.Plugins.ElementInfo.Constants;
+using Neuroptera.Plugins.ElementInfo.Utils;
+using Neuroptera.Revit.Contracts.PluginLogging;
 using System;
 using System.Linq;
 using System.Windows;
 
-namespace MagicEntry.Plugins.ElementInfo.Commands
+namespace Neuroptera.Plugins.ElementInfo.Commands
 {
     [Transaction(TransactionMode.Manual)]
     [Regeneration(RegenerationOption.Manual)]
-    public class OpenViewByNameCommand : IExternalCommand, IPlugin
+    public class OpenViewByNameCommand : IExternalCommand
     {
-        #region IPlugin Implementation
-
-        public PluginInfo Info { get; set; }
-        public bool IsEnabled { get; set; }
-
-        // Инициализация плагина
-        public bool Initialize()
-        {
-            try
-            {
-                IsEnabled = true;
-                return true;
-            }
-            catch
-            {
-                return false;
-            }
-        }
-
-        // Завершение работы плагина
-        public void Shutdown()
-        {
-            // Логика завершения работы
-        }
-
-        #endregion
-
-        #region IExternalCommand Implementation
-
-        // Выполнение команды поиска и открытия вида по имени
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {
+            var doc = commandData.Application.ActiveUIDocument.Document;
+            var journal = PluginOperationJournal.Start(
+                ElementInfoOperations.PluginId,
+                ElementInfoOperations.OpenViewByName,
+                doc.Title);
+
             try
             {
-                var doc = commandData.Application.ActiveUIDocument.Document;
+                journal.Step("Запуск команды открытия вида по имени");
+
                 var uiDoc = commandData.Application.ActiveUIDocument;
 
-                // Проверка: проект, не семейство, не шаблон
                 if (doc.IsFamilyDocument)
                 {
-                    TaskDialog.Show("Ошибка", "Это семейство. Информацию можно получить только из файла проекта");
+                    RevitPluginErrorHandling.ShowValidation(
+                        "Это семейство. Информацию можно получить только из файла проекта.",
+                        "Откройте файл проекта и повторите команду.",
+                        ElementInfoOperations.PluginId,
+                        ElementInfoOperations.OpenViewByName,
+                        doc);
                     return Result.Failed;
                 }
 
-                // Получаем текст для анализа с валидацией
-                string textToAnalyze = GetValidatedTextForAnalysis();
-
+                journal.Step("Получение текста для анализа");
+                string textToAnalyze = GetValidatedTextForAnalysis(journal);
                 if (string.IsNullOrWhiteSpace(textToAnalyze))
                 {
+                    journal.Step("Пользователь отменил ввод текста");
                     return Result.Cancelled;
                 }
 
-                // Извлекаем имя вида из текста
                 string viewName = TextParser.ExtractViewName(textToAnalyze);
-
                 if (string.IsNullOrWhiteSpace(viewName))
                 {
-                    DialogHelper.ShowError(Messages.INVALID_VIEW_FORMAT);
+                    RevitPluginErrorHandling.ShowValidation(
+                        Messages.INVALID_VIEW_FORMAT,
+                        "Скопируйте текст с полем «Активный вид» или введите имя вида вручную.",
+                        ElementInfoOperations.PluginId,
+                        ElementInfoOperations.OpenViewByName,
+                        doc);
                     return Result.Cancelled;
                 }
 
-                // Находим вид по имени
+                journal.Step("Поиск вида", viewName);
                 var targetView = FindViewByName(doc, viewName);
-
                 if (targetView == null)
                 {
-                    DialogHelper.ShowError(Messages.VIEW_NOT_FOUND);
+                    RevitPluginErrorHandling.ShowValidation(
+                        Messages.VIEW_NOT_FOUND,
+                        "Проверьте имя вида в тексте и повторите команду.",
+                        ElementInfoOperations.PluginId,
+                        ElementInfoOperations.OpenViewByName,
+                        doc);
                     return Result.Cancelled;
                 }
 
-                // Открываем найденный вид
+                journal.Step("Переключение на вид", targetView.Name);
                 OpenView(uiDoc, targetView);
 
-                // Показываем результат
                 string successMessage = string.Format(Messages.VIEW_OPENED, viewName);
                 DialogHelper.ShowSuccess(successMessage);
-
+                journal.Complete(successMessage);
                 return Result.Succeeded;
             }
             catch (Exception ex)
             {
                 message = ex.Message;
-                DialogHelper.ShowError($"Ошибка при выполнении команды: {ex.Message}");
+                RevitPluginErrorHandling.Handle(ex, journal);
                 return Result.Failed;
             }
         }
 
-        #endregion
-
-        #region Private Methods
-
-        // Получает и валидирует текст для анализа
-        private string GetValidatedTextForAnalysis()
+        private string GetValidatedTextForAnalysis(PluginOperationJournal journal)
         {
             string textToAnalyze = null;
 
             try
             {
-                // Сначала пробуем получить из буфера обмена
                 string clipboardText = Clipboard.GetText();
                 if (!string.IsNullOrWhiteSpace(clipboardText))
                 {
-                    // Проверяем валидность текста из буфера
                     string viewName = TextParser.ExtractViewName(clipboardText);
                     if (!string.IsNullOrWhiteSpace(viewName))
                     {
+                        journal.Step("Использован текст из буфера обмена");
                         return clipboardText;
                     }
-                    else
-                    {
-                        // Текст из буфера невалидный, показываем WPF диалог с ошибкой
-                        textToAnalyze = DialogHelper.ShowInvalidTextDialog(clipboardText, Messages.INVALID_VIEW_FORMAT);
-                    }
+
+                    textToAnalyze = DialogHelper.ShowInvalidTextDialog(clipboardText, Messages.INVALID_VIEW_FORMAT);
                 }
                 else
                 {
-                    // В буфере нет текста, показываем обычный WPF диалог ввода
                     textToAnalyze = DialogHelper.ShowTextInputDialog();
                 }
             }
             catch
             {
-                // Ошибка при работе с буфером, показываем WPF диалог ввода
                 textToAnalyze = DialogHelper.ShowTextInputDialog();
             }
 
             return textToAnalyze;
         }
 
-        // Находит вид по имени
         private View FindViewByName(Document doc, string viewName)
         {
             try
@@ -162,7 +137,6 @@ namespace MagicEntry.Plugins.ElementInfo.Commands
             }
         }
 
-        // Открывает указанный вид
         private void OpenView(UIDocument uiDoc, View view)
         {
             try
@@ -171,10 +145,7 @@ namespace MagicEntry.Plugins.ElementInfo.Commands
             }
             catch
             {
-                // Не удалось открыть вид
             }
         }
-
-        #endregion
     }
 }

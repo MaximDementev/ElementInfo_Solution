@@ -2,7 +2,7 @@
 using System.Linq;
 using System.Text.RegularExpressions;
 
-namespace MagicEntry.Plugins.ElementInfo.Utils
+namespace Neuroptera.Plugins.ElementInfo.Utils
 {
     // Утилитарный класс для парсинга текста и извлечения информации
     public static class TextParser

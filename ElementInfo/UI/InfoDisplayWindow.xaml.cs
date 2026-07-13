@@ -1,7 +1,7 @@
 ﻿using System.Windows;
 using System.Windows.Documents;
 
-namespace MagicEntry.Plugins.ElementInfo.UI
+namespace Neuroptera.Plugins.ElementInfo.UI
 {
     public partial class InfoDisplayWindow : Window
     {

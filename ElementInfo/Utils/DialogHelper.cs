@@ -1,9 +1,9 @@
 ﻿using Autodesk.Revit.UI;
-using MagicEntry.Plugins.ElementInfo.Constants;
-using MagicEntry.Plugins.ElementInfo.UI;
+using Neuroptera.Plugins.ElementInfo.Constants;
+using Neuroptera.Plugins.ElementInfo.UI;
 using System.Windows;
 
-namespace MagicEntry.Plugins.ElementInfo.Utils
+namespace Neuroptera.Plugins.ElementInfo.Utils
 {
     public static class DialogHelper
     {

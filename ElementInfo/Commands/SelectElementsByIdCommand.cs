@@ -1,151 +1,126 @@
 ﻿using Autodesk.Revit.Attributes;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
-using MagicEntry.Core.Interfaces;
-using MagicEntry.Core.Models;
-using MagicEntry.Plugins.ElementInfo.Constants;
-using MagicEntry.Plugins.ElementInfo.Utils;
+using Neuroptera.Contracts.PluginLogging;
+using Neuroptera.Plugins.ElementInfo.Constants;
+using Neuroptera.Plugins.ElementInfo.Utils;
+using Neuroptera.Revit.Contracts.PluginLogging;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
 
-namespace MagicEntry.Plugins.ElementInfo.Commands
+namespace Neuroptera.Plugins.ElementInfo.Commands
 {
     [Transaction(TransactionMode.Manual)]
     [Regeneration(RegenerationOption.Manual)]
-    public class SelectElementsByIdCommand : IExternalCommand, IPlugin
+    public class SelectElementsByIdCommand : IExternalCommand
     {
-        #region IPlugin Implementation
-
-        public PluginInfo Info { get; set; }
-        public bool IsEnabled { get; set; }
-
-        // Инициализация плагина
-        public bool Initialize()
-        {
-            try
-            {
-                IsEnabled = true;
-                return true;
-            }
-            catch
-            {
-                return false;
-            }
-        }
-
-        // Завершение работы плагина
-        public void Shutdown()
-        {
-            // Логика завершения работы
-        }
-
-        #endregion
-
-        #region IExternalCommand Implementation
-
-        // Выполнение команды поиска и выделения элементов по ID
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {
+            var doc = commandData.Application.ActiveUIDocument.Document;
+            var journal = PluginOperationJournal.Start(
+                ElementInfoOperations.PluginId,
+                ElementInfoOperations.SelectElementsById,
+                doc.Title);
+
             try
             {
-                var doc = commandData.Application.ActiveUIDocument.Document;
+                journal.Step("Запуск команды выбора элементов по ID");
+
                 var uiDoc = commandData.Application.ActiveUIDocument;
 
-                // Проверка: проект, не семейство, не шаблон
                 if (doc.IsFamilyDocument)
                 {
-                    TaskDialog.Show("Ошибка", "Это семейство. Информацию можно получить только из файла проекта");
+                    RevitPluginErrorHandling.ShowValidation(
+                        "Это семейство. Информацию можно получить только из файла проекта.",
+                        "Откройте файл проекта и повторите команду.",
+                        ElementInfoOperations.PluginId,
+                        ElementInfoOperations.SelectElementsById,
+                        doc);
                     return Result.Failed;
                 }
 
-                // Получаем текст для анализа с валидацией
-                string textToAnalyze = GetValidatedTextForAnalysis();
-
+                journal.Step("Получение текста для анализа");
+                string textToAnalyze = GetValidatedTextForAnalysis(journal);
                 if (string.IsNullOrWhiteSpace(textToAnalyze))
                 {
+                    journal.Step("Пользователь отменил ввод текста");
                     return Result.Cancelled;
                 }
 
-                // Извлекаем ID элементов из текста
                 var elementIds = TextParser.ExtractElementIds(textToAnalyze);
-
                 if (!elementIds.Any())
                 {
-                    DialogHelper.ShowError(Messages.INVALID_ID_FORMAT);
+                    RevitPluginErrorHandling.ShowValidation(
+                        Messages.INVALID_ID_FORMAT,
+                        "Укажите ID в формате «ID: число» или несколько ID подряд.",
+                        ElementInfoOperations.PluginId,
+                        ElementInfoOperations.SelectElementsById,
+                        doc);
                     return Result.Cancelled;
                 }
 
-                // Находим и выделяем элементы
+                journal.Step("Поиск элементов по ID", elementIds.Count.ToString());
                 var foundElements = FindElementsById(doc, elementIds);
-
                 if (!foundElements.Any())
                 {
-                    DialogHelper.ShowError(Messages.ELEMENTS_NOT_FOUND);
+                    RevitPluginErrorHandling.ShowValidation(
+                        Messages.ELEMENTS_NOT_FOUND,
+                        "Проверьте ID в тексте и повторите команду.",
+                        ElementInfoOperations.PluginId,
+                        ElementInfoOperations.SelectElementsById,
+                        doc);
                     return Result.Cancelled;
                 }
 
-                // Выделяем найденные элементы
+                journal.Step("Выделение элементов в модели", foundElements.Count.ToString());
                 SelectElements(uiDoc, foundElements);
 
-                // Показываем результат
                 string successMessage = string.Format(Messages.ELEMENTS_SELECTED, foundElements.Count);
                 DialogHelper.ShowSuccess(successMessage);
-
+                journal.Complete(successMessage);
                 return Result.Succeeded;
             }
             catch (Exception ex)
             {
                 message = ex.Message;
-                DialogHelper.ShowError($"Ошибка при выполнении команды: {ex.Message}");
+                RevitPluginErrorHandling.Handle(ex, journal);
                 return Result.Failed;
             }
         }
 
-        #endregion
-
-        #region Private Methods
-
-        // Получает и валидирует текст для анализа
-        private string GetValidatedTextForAnalysis()
+        private string GetValidatedTextForAnalysis(PluginOperationJournal journal)
         {
             string textToAnalyze = null;
 
             try
             {
-                // Сначала пробуем получить из буфера обмена
                 string clipboardText = Clipboard.GetText();
                 if (!string.IsNullOrWhiteSpace(clipboardText))
                 {
-                    // Проверяем валидность текста из буфера
                     var elementIds = TextParser.ExtractElementIds(clipboardText);
                     if (elementIds.Any())
                     {
+                        journal.Step("Использован текст из буфера обмена");
                         return clipboardText;
                     }
-                    else
-                    {
-                        // Текст из буфера невалидный, показываем WPF диалог с ошибкой
-                        textToAnalyze = DialogHelper.ShowInvalidTextDialog(clipboardText, Messages.INVALID_ID_FORMAT);
-                    }
+
+                    textToAnalyze = DialogHelper.ShowInvalidTextDialog(clipboardText, Messages.INVALID_ID_FORMAT);
                 }
                 else
                 {
-                    // В буфере нет текста, показываем обычный WPF диалог ввода
                     textToAnalyze = DialogHelper.ShowTextInputDialog();
                 }
             }
             catch
             {
-                // Ошибка при работе с буфером, показываем WPF диалог ввода
                 textToAnalyze = DialogHelper.ShowTextInputDialog();
             }
 
             return textToAnalyze;
         }
 
-        // Находит элементы по списку ID
         private List<Element> FindElementsById(Document doc, List<int> elementIds)
         {
             var foundElements = new List<Element>();
@@ -162,27 +137,22 @@ namespace MagicEntry.Plugins.ElementInfo.Commands
                 }
                 catch
                 {
-                    // Элемент не найден, продолжаем поиск
                 }
             }
 
             return foundElements;
         }
 
-        // Выделяет элементы в документе
         private void SelectElements(UIDocument uiDoc, List<Element> elements)
         {
             try
             {
-                var elementIds = elements.Select(e => e.Id).ToList();
-                uiDoc.Selection.SetElementIds(elementIds);
+                var ids = elements.Select(e => e.Id).ToList();
+                uiDoc.Selection.SetElementIds(ids);
             }
             catch
             {
-                // Не удалось выделить элементы
             }
         }
-
-        #endregion
     }
 }

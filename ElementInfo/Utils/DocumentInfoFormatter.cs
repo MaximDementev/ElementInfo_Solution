@@ -1,11 +1,11 @@
 ﻿using Autodesk.Revit.DB;
-using MagicEntry.Plugins.ElementInfo.Constants;
+using Neuroptera.Plugins.ElementInfo.Constants;
+using Neuroptera.Plugins.ElementInfo.Models;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using System.Xml.Linq;
 
-namespace MagicEntry.Plugins.ElementInfo.Utils
+namespace Neuroptera.Plugins.ElementInfo.Utils
 {
     // Утилитарный класс для форматирования информации о документе и элементах
     public static class DocumentInfoFormatter
@@ -45,6 +45,40 @@ namespace MagicEntry.Plugins.ElementInfo.Utils
             }
 
             return sb.ToString();
+        }
+
+        // Форматирует таблицы в текст для буфера обмена
+        public static string FormatTablesAsText(IEnumerable<DocumentInfoTable> tables)
+        {
+            if (tables == null)
+                return string.Empty;
+
+            var sb = new StringBuilder();
+
+            foreach (var table in tables)
+            {
+                if (table == null || table.Headers == null || table.Headers.Count == 0)
+                    continue;
+
+                if (!string.IsNullOrEmpty(table.Title))
+                {
+                    sb.AppendLine(table.Title);
+                }
+
+                sb.AppendLine(string.Join("\t", table.Headers));
+
+                if (table.Rows != null)
+                {
+                    foreach (var row in table.Rows)
+                    {
+                        sb.AppendLine(string.Join("\t", row));
+                    }
+                }
+
+                sb.AppendLine();
+            }
+
+            return sb.ToString().TrimEnd();
         }
 
         #endregion

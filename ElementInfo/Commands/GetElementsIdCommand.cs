@@ -2,21 +2,20 @@
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
 using Autodesk.Revit.UI.Selection;
-using MagicEntry.Core.Interfaces;
-using MagicEntry.Core.Models;
-using MagicEntry.Plugins.ElementInfo.Constants;
-using MagicEntry.Plugins.ElementInfo.Services;
-using MagicEntry.Plugins.ElementInfo.UI;
+using Neuroptera.Contracts.PluginLogging;
+using Neuroptera.Plugins.ElementInfo.Constants;
+using Neuroptera.Plugins.ElementInfo.Services;
+using Neuroptera.Plugins.ElementInfo.UI;
+using Neuroptera.Revit.Contracts.PluginLogging;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Windows.Documents;
 
-namespace MagicEntry.Plugins.ElementInfo.Commands
+namespace Neuroptera.Plugins.ElementInfo.Commands
 {
     [Transaction(TransactionMode.Manual)]
     [Regeneration(RegenerationOption.Manual)]
-    public class GetElementsIdCommand : IExternalCommand, IPlugin
+    public class GetElementsIdCommand : IExternalCommand
     {
         private readonly IElementInfoService _elementInfoService;
 
@@ -25,116 +24,104 @@ namespace MagicEntry.Plugins.ElementInfo.Commands
             _elementInfoService = new ElementInfoService();
         }
 
-        #region IPlugin Implementation
-
-        public PluginInfo Info { get; set; }
-        public bool IsEnabled { get; set; }
-
-        public bool Initialize()
-        {
-            try
-            {
-                IsEnabled = true;
-                return true;
-            }
-            catch
-            {
-                return false;
-            }
-        }
-
-        public void Shutdown()
-        {
-        }
-
-        #endregion
-
-        #region IExternalCommand Implementation
-
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {
+            var doc = commandData.Application.ActiveUIDocument.Document;
+            var journal = PluginOperationJournal.Start(
+                ElementInfoOperations.PluginId,
+                ElementInfoOperations.GetElementsId,
+                doc.Title);
+
             try
             {
-                var uidoc = commandData.Application.ActiveUIDocument;
-                var doc = uidoc.Document;
+                journal.Step("Запуск команды получения ID элементов");
 
-                // Проверка: проект, не семейство, не шаблон
+                var uidoc = commandData.Application.ActiveUIDocument;
+
                 if (doc.IsFamilyDocument)
                 {
-                    TaskDialog.Show("Ошибка", "Это семейство. Информацию можно получить только из файла проекта");
+                    RevitPluginErrorHandling.ShowValidation(
+                        "Это семейство. Информацию можно получить только из файла проекта.",
+                        "Откройте файл проекта и повторите команду.",
+                        ElementInfoOperations.PluginId,
+                        ElementInfoOperations.GetElementsId,
+                        doc);
                     return Result.Failed;
                 }
 
-                // Получаем уже выбранные элементы
                 var elementIds = new HashSet<ElementId>(_elementInfoService
-                                     .GetPreSelectedElements(uidoc)
-                                     .Select(e => e.Id));
+                    .GetPreSelectedElements(uidoc)
+                    .Select(e => e.Id));
 
-                // Если нет предварительно выбранных элементов, запускаем выбор
                 if (!elementIds.Any())
                 {
+                    journal.Step("Выбор элементов пользователем");
                     var selected = SelectElementsWithBox(uidoc.Selection, doc);
                     if (selected != null)
+                    {
                         foreach (var e in selected)
+                        {
                             elementIds.Add(e.Id);
+                        }
+                    }
                 }
 
                 if (!elementIds.Any())
                 {
-                    TaskDialog.Show("Ошибка", Messages.NO_ELEMENTS_SELECTED);
+                    RevitPluginErrorHandling.ShowValidation(
+                        Messages.NO_ELEMENTS_SELECTED,
+                        "Выберите элементы в модели и повторите команду.",
+                        ElementInfoOperations.PluginId,
+                        ElementInfoOperations.GetElementsId,
+                        doc);
                     return Result.Cancelled;
                 }
 
-                // Формируем текст
+                journal.Step("Формирование списка ID", elementIds.Count.ToString());
                 string initialText = _elementInfoService.GetElementsIds(elementIds);
-
                 var allIds = new HashSet<ElementId>(elementIds);
                 string currentText = initialText;
 
                 while (true)
                 {
-                    // Показываем модальное окно с текущим текстом
+                    journal.Step("Отображение окна со списком ID");
                     var window = new InfoDisplayWindow("ID элементов", showSelectMoreButton: true);
                     window.SetText(currentText);
-                    bool? result = window.ShowDialog(); // модально
+                    bool? result = window.ShowDialog();
 
-                    if (result != true) // пользователь закрыл окно без "Выбрать ещё"
+                    if (result != true)
+                    {
                         break;
+                    }
 
-                    // Берём текущий текст из окна (редактированный пользователем)
                     currentText = window.GetText();
 
-                    // Дополнительный выбор элементов
                     var additionalElements = SelectElementsWithBox(uidoc.Selection, doc);
                     if (additionalElements == null || !additionalElements.Any())
+                    {
                         break;
+                    }
 
-                    // Добавляем новые ID
+                    journal.Step("Добавлены дополнительные элементы", additionalElements.Count.ToString());
                     foreach (var e in additionalElements)
+                    {
                         allIds.Add(e.Id);
+                    }
 
-                    // Объединяем текст пользователя и новые ID
                     string newIdsText = _elementInfoService.GetElementsIds(additionalElements.Select(e => e.Id));
                     currentText = currentText.TrimEnd() + "\n" + newIdsText;
                 }
 
-                // В конце allIds содержит все выбранные элементы, currentText — итоговый текст
-
-
-
+                journal.Complete($"Получены ID элементов: {allIds.Count}");
                 return Result.Succeeded;
             }
             catch (Exception ex)
             {
                 message = ex.Message;
-                TaskDialog.Show("Ошибка", $"Ошибка при выполнении команды: {ex.Message}");
+                RevitPluginErrorHandling.Handle(ex, journal);
                 return Result.Failed;
             }
         }
-
-        #endregion
-
-        #region Private Methods
 
         private List<Element> SelectElementsWithBox(Selection selection, Document doc)
         {
@@ -148,8 +135,5 @@ namespace MagicEntry.Plugins.ElementInfo.Commands
                 return null;
             }
         }
-
-
-        #endregion
     }
 }

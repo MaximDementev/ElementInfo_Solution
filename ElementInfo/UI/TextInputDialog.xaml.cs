@@ -1,6 +1,6 @@
 ﻿using System.Windows;
 
-namespace MagicEntry.Plugins.ElementInfo.UI
+namespace Neuroptera.Plugins.ElementInfo.UI
 {
     // WPF диалог для ввода текста
     public partial class TextInputDialog : Window
